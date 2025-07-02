@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const Keycloak = require('keycloak-connect');
+const axios = require('axios');
 
 const app = express();
 const port = 3000;
@@ -67,6 +68,31 @@ app.get('/account', (req, res) => {
 app.get('/reset-password', (req, res) => {
   const resetUrl = `http://localhost:8080/realms/oriboshitest/login-actions/reset-credentials?client_id=myclient`;
   res.redirect(resetUrl);
+});
+
+
+// Admin REST API helper functions
+async function getAdminToken() {
+  const params = new URLSearchParams();
+  params.append('grant_type', 'client_credentials');
+  params.append('client_id', process.env.KEYCLOAK_ADMIN_CLIENT_ID);
+  params.append('client_secret', process.env.KEYCLOAK_ADMIN_CLIENT_SECRET);
+
+  const response = await axios.post(`${process.env.KEYCLOAK_AUTH_SERVER_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/token`, params);
+  return response.data.access_token;
+}
+
+
+app.get('/admin/users', keycloak.protect('realm:admin'), async (req, res) => {
+  try {
+    const token = await getAdminToken();
+    const usersResponse = await axios.get(`${process.env.KEYCLOAK_AUTH_SERVER_URL}/admin/realms/${process.env.KEYCLOAK_REALM}/users`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    res.json(usersResponse.data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 
